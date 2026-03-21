@@ -123,7 +123,37 @@ export function createMainHandler(): (req: IncomingMessage, res: ServerResponse)
       return; // Let Express handle it
     }
 
-    // 4. Proxy via cookie
+    // 4. Alias route: /<name> → lookup tunnel by name, set cookie, redirect
+    const pathname = url.pathname;
+    if (pathname !== '/' && !pathname.startsWith('/lm')) {
+      const alias = pathname.slice(1).split('/')[0].toLowerCase();
+      const state = readState();
+      const tunnel = state.tunnels.find(
+        (t) => t.name.toLowerCase() === alias
+      );
+
+      if (tunnel) {
+        // Check token if required
+        if (tunnel.token) {
+          const tokenParam = url.searchParams.get('token');
+          if (tokenParam !== tunnel.token) {
+            res.writeHead(401, { 'Content-Type': 'text/html' });
+            res.end(`<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#111;color:#fff">
+              <div style="text-align:center"><h1>401</h1><p>Token required: /${alias}?token=xxx</p></div></body></html>`);
+            return;
+          }
+        }
+
+        res.writeHead(302, {
+          'Set-Cookie': `lm_tunnel=${tunnel.localPort}; Path=/; SameSite=Lax`,
+          'Location': '/',
+        });
+        res.end();
+        return;
+      }
+    }
+
+    // 5. Proxy via cookie
     const tunnelPort = getTunnelPort(req);
     if (tunnelPort) {
       const proxy = getOrCreateProxy(tunnelPort);
@@ -131,7 +161,7 @@ export function createMainHandler(): (req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    // 5. No cookie — redirect to dashboard
+    // 6. No cookie — redirect to dashboard
     res.writeHead(302, { 'Location': '/lm/' });
     res.end();
   };
@@ -224,7 +254,7 @@ export function createApiRouter(onTunnelChange: () => void): Router {
       res.json({
         ok: true,
         tunnel,
-        url: `http://${host}:${DASHBOARD_PORT}/?tunnel=${localPort}`,
+        url: `http://${host}:${DASHBOARD_PORT}/${effectiveName}`,
       });
     } catch (err) {
       res.status(500).json({ ok: false, error: (err as Error).message });

@@ -149,7 +149,7 @@ program
 
       for (const t of data.tunnels) {
         const statusColor = t.status === 'active' ? chalk.green : chalk.red;
-        const url = `http://${host}:${DASHBOARD_PORT}/?tunnel=${t.localPort}`;
+        const url = `http://${host}:${DASHBOARD_PORT}/${t.name}`;
         console.log(
           `  ${t.name.padEnd(18)}` +
           `${chalk.dim(':' + t.localPort.toString().padEnd(8))}` +

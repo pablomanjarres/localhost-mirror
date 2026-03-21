@@ -219,14 +219,17 @@ function render(tunnels) {
     return;
   }
   tunnelsEl.innerHTML = tunnels.map(t => {
-    const url = `${location.origin}/?tunnel=${t.localPort}`;
+    const aliasUrl = `${location.origin}/${t.name}`;
+    const fullUrl = t.token ? `${aliasUrl}?token=${t.token}` : aliasUrl;
     const dotClass = t.status === 'active' ? '' : t.status === 'target-down' ? 'down' : 'unknown';
     return `
       <div class="tunnel">
         <div class="dot ${dotClass}"></div>
         <div class="tunnel-info">
           <div class="tunnel-name">${esc(t.name)}</div>
-          <div class="tunnel-url">${esc(url)}</div>
+          <div class="tunnel-url">
+            <a href="${esc(fullUrl)}" style="color:#888;text-decoration:none">${esc(aliasUrl)}</a>
+          </div>
           <div class="tunnel-meta">
             <span>localhost:${t.localPort}</span>
             <span>up ${timeAgo(t.createdAt)}</span>
@@ -234,7 +237,8 @@ function render(tunnels) {
           </div>
         </div>
         <div class="tunnel-actions">
-          <button class="btn btn-copy" onclick="copyUrl('${url}${t.token ? '?token=' + t.token : ''}')">Copy</button>
+          <button class="btn btn-copy" onclick="copyUrl('${fullUrl}')">Copy</button>
+          <button class="btn btn-copy" onclick="window.open('${esc(fullUrl)}','_blank')">Open</button>
           <button class="btn btn-stop" onclick="stopTunnel('${t.id}')">Stop</button>
         </div>
       </div>

@@ -261,9 +261,10 @@ struct TunnelListView: View {
     private func copyUrl(_ port: LocalPort) {
         let host = client.tailscale?.ip ?? client.tailscale?.hostname ?? "?"
         let tunnel = client.tunnels.first { $0.localPort == port.port }
-        var url = "http://\(host):19100/?tunnel=\(port.port)"
+        let name = tunnel?.name ?? "port-\(port.port)"
+        var url = "http://\(host):19100/\(name)"
         if let token = tunnel?.token, !token.isEmpty {
-            url += "&token=\(token)"
+            url += "?token=\(token)"
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(url, forType: .string)
