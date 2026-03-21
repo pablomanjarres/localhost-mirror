@@ -18,12 +18,14 @@ struct TunnelListView: View {
                 || $0.processName.localizedCaseInsensitiveContains(searchText)
                 || (scanner.portTitles[$0.port]?.localizedCaseInsensitiveContains(searchText) ?? false)
                 || (CommonPorts.label(for: $0.port, processName: $0.processName)?.localizedCaseInsensitiveContains(searchText) ?? false)
+                || ($0.project?.localizedCaseInsensitiveContains(searchText) ?? false)
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
             header
+            if !scanner.alerts.isEmpty { alertBanner }
             if scanner.ports.count > 5 { searchBar }
             Divider()
 
@@ -40,7 +42,7 @@ struct TunnelListView: View {
             Divider()
             footer
         }
-        .frame(width: 350)
+        .frame(width: 380)
         .onAppear {
             client.startPolling()
             scanner.startScanning()
@@ -82,6 +84,48 @@ struct TunnelListView: View {
         .padding(.vertical, 10)
     }
 
+    // MARK: - Alert Banner
+
+    private var alertBanner: some View {
+        VStack(spacing: 0) {
+            Divider()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(scanner.alerts.suffix(5)) { alert in
+                        HStack(spacing: 4) {
+                            Image(systemName: alert.severity == .critical ? "exclamationmark.triangle.fill" : "exclamationmark.circle.fill")
+                                .font(.system(size: 9))
+                            Text(alert.message)
+                                .font(.system(size: 10))
+                                .lineLimit(1)
+                            Button(action: { scanner.dismissAlert(alert) }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 8))
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                        .foregroundColor(alert.severity == .critical ? .red : .orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background((alert.severity == .critical ? Color.red : Color.orange).opacity(0.1))
+                        .cornerRadius(4)
+                    }
+
+                    if scanner.alerts.count > 1 {
+                        Button(action: { scanner.clearAlerts() }) {
+                            Text("Clear all")
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(.horizontal, 14)
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
     private var searchBar: some View {
         TextField("Filter ports...", text: $searchText)
             .textFieldStyle(.roundedBorder)
@@ -101,7 +145,7 @@ struct TunnelListView: View {
                         title: scanner.portTitles[port.port],
                         isExposed: exposedPorts.contains(port.port),
                         tunnel: client.tunnels.first { $0.localPort == port.port },
-                        tailscaleHost: client.tailscale?.hostname ?? client.tailscale?.ip ?? "?",
+                        tailscaleIp: client.tailscale?.ip ?? client.tailscale?.hostname ?? "?",
                         onExpose: { exposePort(port) },
                         onStop: { stopTunnel(port) },
                         onCopy: { copyUrl(port) },
@@ -114,7 +158,7 @@ struct TunnelListView: View {
                 }
             }
         }
-        .frame(maxHeight: 400)
+        .frame(maxHeight: 420)
     }
 
     // MARK: - States
@@ -195,7 +239,8 @@ struct TunnelListView: View {
 
     private func exposePort(_ port: LocalPort) {
         Task {
-            let response = await client.expose(port: port.port, name: port.processName.lowercased())
+            let name = port.project ?? port.processName.lowercased()
+            let response = await client.expose(port: port.port, name: name)
             if let r = response, r.ok {
                 showToast("Exposed :\(port.port)")
             } else {
@@ -214,7 +259,6 @@ struct TunnelListView: View {
     }
 
     private func copyUrl(_ port: LocalPort) {
-        // Use raw IP — MagicDNS often doesn't resolve on iOS devices
         let host = client.tailscale?.ip ?? client.tailscale?.hostname ?? "?"
         let tunnel = client.tunnels.first { $0.localPort == port.port }
         var url = "http://\(host):19100/?tunnel=\(port.port)"
@@ -241,7 +285,7 @@ struct PortRow: View {
     let title: String?
     let isExposed: Bool
     let tunnel: Tunnel?
-    let tailscaleHost: String
+    let tailscaleIp: String
     let onExpose: () -> Void
     let onStop: () -> Void
     let onCopy: () -> Void
@@ -257,14 +301,22 @@ struct PortRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Status dot: green if exposed, colored by type otherwise
-            Circle()
-                .fill(isExposed ? Color.green : portColor.opacity(0.6))
-                .frame(width: 6, height: 6)
+            // Status dot
+            ZStack {
+                Circle()
+                    .fill(isExposed ? Color.green : portColor.opacity(0.6))
+                    .frame(width: 6, height: 6)
+                if port.hasAlert {
+                    Circle()
+                        .stroke(Color.red, lineWidth: 1.5)
+                        .frame(width: 10, height: 10)
+                }
+            }
+            .frame(width: 12)
 
             VStack(alignment: .leading, spacing: 2) {
                 // Port number + labels
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Text(":\(port.port)")
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
 
@@ -296,6 +348,16 @@ struct PortRow: View {
                             .background(Color.orange.opacity(0.1))
                             .cornerRadius(3)
                     }
+
+                    if port.stats?.isZombie == true {
+                        Text("zombie")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.red.opacity(0.15))
+                            .cornerRadius(3)
+                    }
                 }
 
                 // HTTP title
@@ -306,10 +368,46 @@ struct PortRow: View {
                         .lineLimit(1)
                 }
 
-                // Process info
-                Text("\(port.processName) · PID \(port.pid)")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                // Process info + project
+                HStack(spacing: 0) {
+                    Text(port.processName)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Text(" · PID \(port.pid)")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    if let project = port.project {
+                        Text(" · ")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Text(project)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.cyan)
+                    }
+                }
+
+                // CPU / RAM bar
+                if let stats = port.stats {
+                    HStack(spacing: 8) {
+                        // CPU
+                        HStack(spacing: 3) {
+                            Image(systemName: "cpu")
+                                .font(.system(size: 8))
+                            Text(String(format: "%.0f%%", stats.cpu))
+                                .font(.system(size: 9, design: .monospaced))
+                        }
+                        .foregroundColor(port.hasHighCPU ? .red : .secondary)
+
+                        // RAM
+                        HStack(spacing: 3) {
+                            Image(systemName: "memorychip")
+                                .font(.system(size: 8))
+                            Text("\(stats.memoryMB)MB")
+                                .font(.system(size: 9, design: .monospaced))
+                        }
+                        .foregroundColor(port.hasHighMemory ? .red : .secondary)
+                    }
+                }
             }
 
             Spacer()
@@ -336,7 +434,6 @@ struct PortRow: View {
                     }
                 } else {
                     HStack(spacing: 4) {
-                        // Open locally
                         Button(action: {
                             if let url = URL(string: "http://localhost:\(port.port)") {
                                 NSWorkspace.shared.open(url)
@@ -349,7 +446,6 @@ struct PortRow: View {
                         .help("Open localhost:\(port.port)")
 
                         if isExposed {
-                            // Copy tunnel URL
                             Button(action: onCopy) {
                                 Image(systemName: "doc.on.doc")
                                     .font(.system(size: 11))
@@ -358,7 +454,6 @@ struct PortRow: View {
                             .buttonStyle(.borderless)
                             .help("Copy Tailscale URL")
 
-                            // Stop tunnel
                             Button(action: onStop) {
                                 Image(systemName: "stop.circle")
                                     .font(.system(size: 11))
@@ -367,7 +462,6 @@ struct PortRow: View {
                             .buttonStyle(.borderless)
                             .help("Stop tunnel")
                         } else {
-                            // Expose
                             Button(action: onExpose) {
                                 Image(systemName: "arrow.up.right.circle.fill")
                                     .font(.system(size: 11))
@@ -377,7 +471,6 @@ struct PortRow: View {
                             .help("Expose over Tailscale")
                         }
 
-                        // Kill process
                         Button(action: { confirmKill = true }) {
                             Image(systemName: "xmark.circle")
                                 .font(.system(size: 11))
