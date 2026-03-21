@@ -1,0 +1,29 @@
+{
+  "name": "localhost-mirror",
+  "version": "1.0.0",
+  "description": "Expose local ports securely over Tailscale",
+  "type": "module",
+  "bin": {
+    "lm": "./bin/lm.ts"
+  },
+  "scripts": {
+    "dev": "tsx bin/lm.ts",
+    "daemon": "tsx src/daemon.ts",
+    "build": "tsc",
+    "start": "node dist/bin/lm.js"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^14.0.0",
+    "express": "^5.1.0",
+    "http-proxy": "^1.18.1",
+    "nanoid": "^5.1.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.2",
+    "@types/http-proxy": "^1.17.16",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "~5.8.3"
+  }
+}
