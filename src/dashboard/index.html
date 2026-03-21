@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Localhost Mirror</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    background: #0a0a0a;
+    color: #e5e5e5;
+    min-height: 100vh;
+  }
+  .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 40px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  h1 span { color: #666; font-weight: 400; }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    background: #1a1a1a;
+    border: 1px solid #262626;
+  }
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+  }
+  .dot.down { background: #ef4444; }
+  .dot.unknown { background: #666; }
+
+  .tunnels { display: flex; flex-direction: column; gap: 8px; }
+  .tunnel {
+    display: grid;
+    grid-template-columns: 6px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: #111;
+    border: 1px solid #1f1f1f;
+    border-radius: 12px;
+    transition: border-color 0.15s;
+  }
+  .tunnel:hover { border-color: #333; }
+  .tunnel-info { display: flex; flex-direction: column; gap: 4px; }
+  .tunnel-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+  }
+  .tunnel-url {
+    font-size: 13px;
+    font-family: 'SF Mono', Menlo, monospace;
+    color: #888;
+  }
+  .tunnel-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: #555;
+  }
+  .tunnel-actions { display: flex; gap: 8px; }
+  .btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #262626;
+    background: #1a1a1a;
+    color: #ccc;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: #262626; color: #fff; }
+  .btn-stop { border-color: #3b1111; }
+  .btn-stop:hover { background: #3b1111; color: #f87171; }
+  .btn-copy { border-color: #1a2e1a; }
+  .btn-copy:hover { background: #1a2e1a; color: #4ade80; }
+
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #555;
+    font-size: 14px;
+  }
+  .empty code {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 4px 10px;
+    background: #1a1a1a;
+    border-radius: 6px;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 13px;
+    color: #888;
+  }
+
+  .expose-form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .expose-form input {
+    flex: 1;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid #262626;
+    background: #111;
+    color: #e5e5e5;
+    font-size: 13px;
+    font-family: 'SF Mono', Menlo, monospace;
+    outline: none;
+  }
+  .expose-form input:focus { border-color: #444; }
+  .expose-form input::placeholder { color: #444; }
+  .btn-expose {
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 1px solid #1a2e1a;
+    background: #1a2e1a;
+    color: #4ade80;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-expose:hover { background: #224422; }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    background: #1a2e1a;
+    color: #4ade80;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>localhost mirror <span>tunnels</span></h1>
+    <div class="status-badge">
+      <div class="dot" id="daemon-dot"></div>
+      <span id="daemon-status">connected</span>
+    </div>
+  </header>
+
+  <form class="expose-form" id="expose-form">
+    <input type="number" id="port-input" placeholder="port (e.g. 3000)" min="1" max="65535" required>
+    <input type="text" id="name-input" placeholder="name (optional)">
+    <button type="submit" class="btn-expose">Expose</button>
+  </form>
+
+  <div class="tunnels" id="tunnels"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const tunnelsEl = document.getElementById('tunnels');
+const toastEl = document.getElementById('toast');
+const daemonDot = document.getElementById('daemon-dot');
+const daemonStatus = document.getElementById('daemon-status');
+const exposeForm = document.getElementById('expose-form');
+
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), 2000);
+}
+
+function timeAgo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+async function fetchTunnels() {
+  try {
+    const res = await fetch('/lm/api/tunnels');
+    const data = await res.json();
+    daemonDot.className = 'dot';
+    daemonStatus.textContent = 'connected';
+    render(data.tunnels || []);
+  } catch {
+    daemonDot.className = 'dot down';
+    daemonStatus.textContent = 'disconnected';
+    tunnelsEl.innerHTML = '<div class="empty">Daemon not reachable</div>';
+  }
+}
+
+function render(tunnels) {
+  if (tunnels.length === 0) {
+    tunnelsEl.innerHTML = '<div class="empty">No active tunnels<br><code>lm expose &lt;port&gt;</code></div>';
+    return;
+  }
+  tunnelsEl.innerHTML = tunnels.map(t => {
+    const url = `${location.origin}/?tunnel=${t.localPort}`;
+    const dotClass = t.status === 'active' ? '' : t.status === 'target-down' ? 'down' : 'unknown';
+    return `
+      <div class="tunnel">
+        <div class="dot ${dotClass}"></div>
+        <div class="tunnel-info">
+          <div class="tunnel-name">${esc(t.name)}</div>
+          <div class="tunnel-url">${esc(url)}</div>
+          <div class="tunnel-meta">
+            <span>localhost:${t.localPort}</span>
+            <span>up ${timeAgo(t.createdAt)}</span>
+            ${t.token ? '<span>token-auth</span>' : ''}
+          </div>
+        </div>
+        <div class="tunnel-actions">
+          <button class="btn btn-copy" onclick="copyUrl('${url}${t.token ? '?token=' + t.token : ''}')">Copy</button>
+          <button class="btn btn-stop" onclick="stopTunnel('${t.id}')">Stop</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function copyUrl(url) {
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('URL copied');
+  } catch {
+    toast('Copy failed');
+  }
+}
+
+async function stopTunnel(id) {
+  await fetch(`/lm/api/tunnels/${id}`, { method: 'DELETE' });
+  toast('Tunnel stopped');
+  fetchTunnels();
+}
+
+exposeForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const port = parseInt(document.getElementById('port-input').value, 10);
+  const name = document.getElementById('name-input').value || undefined;
+  try {
+    const res = await fetch('/lm/api/tunnels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localPort: port, name }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast(`Exposed :${port}`);
+      document.getElementById('port-input').value = '';
+      document.getElementById('name-input').value = '';
+    } else {
+      toast(data.error || 'Failed');
+    }
+  } catch {
+    toast('Failed to connect');
+  }
+  fetchTunnels();
+});
+
+fetchTunnels();
+setInterval(fetchTunnels, 3000);
+</script>
+</body>
+</html>
