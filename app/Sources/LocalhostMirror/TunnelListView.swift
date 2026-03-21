@@ -146,7 +146,7 @@ struct TunnelListView: View {
                         isExposed: exposedPorts.contains(port.port),
                         tunnel: client.tunnels.first { $0.localPort == port.port },
                         tailscaleIp: client.tailscale?.ip ?? client.tailscale?.hostname ?? "?",
-                        onExpose: { exposePort(port) },
+                        onExpose: { name in exposePort(port, name: name) },
                         onStop: { stopTunnel(port) },
                         onCopy: { copyUrl(port) },
                         onKill: { scanner.killProcess(port) },
@@ -237,12 +237,12 @@ struct TunnelListView: View {
 
     // MARK: - Actions
 
-    private func exposePort(_ port: LocalPort) {
+    private func exposePort(_ port: LocalPort, name: String) {
+        let finalName = name.isEmpty ? (port.project ?? port.processName.lowercased()) : name
         Task {
-            let name = port.project ?? port.processName.lowercased()
-            let response = await client.expose(port: port.port, name: name)
+            let response = await client.expose(port: port.port, name: finalName)
             if let r = response, r.ok {
-                showToast("Exposed :\(port.port)")
+                showToast("Exposed /\(finalName)")
             } else {
                 showToast(response?.error ?? "Failed")
             }
@@ -287,7 +287,7 @@ struct PortRow: View {
     let isExposed: Bool
     let tunnel: Tunnel?
     let tailscaleIp: String
-    let onExpose: () -> Void
+    let onExpose: (String) -> Void
     let onStop: () -> Void
     let onCopy: () -> Void
     let onKill: () -> Void
@@ -295,6 +295,8 @@ struct PortRow: View {
 
     @State private var isHovered = false
     @State private var confirmKill = false
+    @State private var showExposeInput = false
+    @State private var exposeName = ""
 
     private var portColor: Color {
         CommonPorts.color(for: port.port, processName: port.processName)
@@ -433,6 +435,29 @@ struct PortRow: View {
                         }
                         .buttonStyle(.borderless)
                     }
+                } else if showExposeInput {
+                    HStack(spacing: 4) {
+                        TextField("alias", text: $exposeName)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+                            .frame(width: 90)
+                            .onSubmit { submitExpose() }
+                            .onAppear {
+                                exposeName = port.project ?? port.processName.lowercased()
+                            }
+                        Button(action: { submitExpose() }) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.green)
+                        }
+                        .buttonStyle(.borderless)
+                        Button(action: { showExposeInput = false }) {
+                            Image(systemName: "xmark.circle")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
                 } else {
                     HStack(spacing: 4) {
                         Button(action: {
@@ -463,7 +488,7 @@ struct PortRow: View {
                             .buttonStyle(.borderless)
                             .help("Stop tunnel")
                         } else {
-                            Button(action: onExpose) {
+                            Button(action: { showExposeInput = true }) {
                                 Image(systemName: "arrow.up.right.circle.fill")
                                     .font(.system(size: 11))
                                     .foregroundColor(.green)
@@ -489,7 +514,13 @@ struct PortRow: View {
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering
-            if !hovering { confirmKill = false }
+            if !hovering { confirmKill = false; showExposeInput = false }
         }
+    }
+
+    private func submitExpose() {
+        onExpose(exposeName)
+        showExposeInput = false
+        exposeName = ""
     }
 }
