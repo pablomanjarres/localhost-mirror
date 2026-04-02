@@ -1,8 +1,63 @@
+# Dependencies
 node_modules/
+.pnpm-store/
+package-lock.json
+yarn.lock
+
+# Build output
 dist/
 *.tsbuildinfo
-.DS_Store
+.turbo/
 
 # Swift build artifacts
 app/.build/
 app/build/
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+._*
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test/Coverage
+coverage/
+*.lcov
+
+# Private/Local
+.private/
+private/
+.archgraph/
+.nella/
+.mcp.json
+
+# Claude Code
+.claude/
+CLAUDE.md
+.agents/
+tasks/
+
+# Misc
+*.code-workspace
+tmp/
+temp/
+*.tmp
