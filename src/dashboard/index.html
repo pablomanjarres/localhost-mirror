@@ -153,6 +153,45 @@
     pointer-events: none;
   }
   .toast.show { opacity: 1; }
+
+  @media (max-width: 600px) {
+    .container { padding: 20px 14px; }
+    header { margin-bottom: 24px; }
+    h1 { font-size: 17px; }
+
+    .expose-form {
+      flex-direction: column;
+    }
+    .expose-form input,
+    .btn-expose {
+      width: 100%;
+    }
+
+    .tunnel {
+      grid-template-columns: 6px 1fr;
+      gap: 10px;
+      padding: 14px 14px;
+    }
+    .tunnel-actions {
+      grid-column: 1 / -1;
+      justify-content: stretch;
+    }
+    .tunnel-actions .btn {
+      flex: 1;
+      text-align: center;
+    }
+    .tunnel-url {
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .toast {
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      text-align: center;
+    }
+  }
 </style>
 </head>
 <body>

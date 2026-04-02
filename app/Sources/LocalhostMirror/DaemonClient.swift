@@ -89,18 +89,18 @@ class DaemonClient: ObservableObject {
 
     func startDaemon() {
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/npx")
-        task.arguments = ["tsx", daemonScriptPath()]
+        task.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        task.arguments = ["-l", "-c", "cd \(projectPath()) && npx tsx \(daemonScriptPath()) >> ~/.localhost-mirror/daemon.log 2>&1 &"]
         task.currentDirectoryURL = URL(fileURLWithPath: projectPath())
-        task.standardOutput = nil
-        task.standardError = nil
 
-        // Detach so it survives app quit
-        task.qualityOfService = .background
+        // Pipe output so the GUI process doesn't block
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
 
         do {
             try task.run()
-            // Give it time to start
+            task.waitUntilExit()
+            // Give the backgrounded daemon time to bind
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
                 self?.refresh()
             }

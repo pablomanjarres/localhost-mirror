@@ -6,8 +6,8 @@ export const STATE_FILE = join(STATE_DIR, 'state.json');
 export const DAEMON_PID_FILE = join(STATE_DIR, 'daemon.pid');
 export const DAEMON_LOG_FILE = join(STATE_DIR, 'daemon.log');
 
-export const MGMT_PORT = 19099;
-export const DASHBOARD_PORT = 19100;
+export const MGMT_PORT = parseInt(process.env.LM_MGMT_PORT || '19099', 10);
+export const DASHBOARD_PORT = parseInt(process.env.LM_DASHBOARD_PORT || '19100', 10);
 
 export const TAILSCALE_CLI_PATHS = [
   'tailscale',

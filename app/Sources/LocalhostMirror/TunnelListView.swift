@@ -42,7 +42,7 @@ struct TunnelListView: View {
             Divider()
             footer
         }
-        .frame(width: 380)
+        .frame(width: 440)
         .onAppear {
             client.startPolling()
             scanner.startScanning()
@@ -158,7 +158,7 @@ struct TunnelListView: View {
                 }
             }
         }
-        .frame(maxHeight: 420)
+        .frame(minHeight: 300, maxHeight: 500)
     }
 
     // MARK: - States
@@ -173,8 +173,15 @@ struct TunnelListView: View {
                 .foregroundColor(.secondary)
             Button("Start Daemon") { client.startDaemon() }
                 .controlSize(.small)
+            if let error = client.lastError {
+                Text(error)
+                    .font(.system(size: 10))
+                    .foregroundColor(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+            }
         }
-        .frame(height: 120)
+        .frame(minHeight: 120)
         .frame(maxWidth: .infinity)
     }
 

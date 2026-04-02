@@ -2,6 +2,7 @@ import http from 'node:http';
 import httpProxy from 'http-proxy';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
+import { isTailscaleOrLocal } from './utils/network.js';
 
 export interface ProxyConfig {
   localPort: number;
@@ -15,17 +16,6 @@ export interface ProxyInstance {
   server: http.Server;
   proxy: httpProxy;
   config: ProxyConfig;
-}
-
-// Tailscale CGNAT range: 100.64.0.0/10 (100.64.0.0 - 100.127.255.255)
-function isTailscaleIp(ip: string): boolean {
-  const clean = ip.replace(/^::ffff:/, '');
-  if (clean === '127.0.0.1' || clean === '::1') return true;
-  const parts = clean.split('.');
-  if (parts.length !== 4) return false;
-  const first = parseInt(parts[0], 10);
-  const second = parseInt(parts[1], 10);
-  return first === 100 && second >= 64 && second <= 127;
 }
 
 function send403(res: ServerResponse): void {
@@ -72,7 +62,7 @@ function checkAccess(req: IncomingMessage, config: ProxyConfig, res?: ServerResp
   // Check Tailscale CIDR
   if (config.tailscaleOnly) {
     const remote = req.socket.remoteAddress ?? '';
-    if (!isTailscaleIp(remote)) {
+    if (!isTailscaleOrLocal(remote)) {
       if (res) send403(res);
       return false;
     }

@@ -1,6 +1,6 @@
 import express from 'express';
 import http from 'node:http';
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createApiRouter, createMainHandler, handleUpgrade, getTunnelsFromState, updateTunnelStatus, getProxyCache } from './api.js';
 import { tailscaleOnly } from './auth.js';
 import { createDashboardRouter } from './dashboard/server.js';
@@ -8,10 +8,17 @@ import { startHealthChecker } from './health.js';
 import { readState, writeState, ensureStateDir } from './store.js';
 import { getTailscaleInfo } from './tailscale.js';
 import { MGMT_PORT, DASHBOARD_PORT, DAEMON_PID_FILE, DAEMON_SHUTDOWN_GRACE_MS } from './utils/constants.js';
+import { isTailscaleOrLocal } from './utils/network.js';
+
+const persistent = process.argv.includes('--persistent');
+
+const MGMT_HOST = process.env.LM_MGMT_HOST || '127.0.0.1';
+const DASHBOARD_HOST = process.env.LM_DASHBOARD_HOST || '0.0.0.0';
 
 let shutdownTimer: NodeJS.Timeout | null = null;
 
 function scheduleAutoShutdown(): void {
+  if (persistent) return;
   if (shutdownTimer) clearTimeout(shutdownTimer);
   const state = readState();
   if (state.tunnels.length === 0) {
@@ -50,6 +57,20 @@ function cleanup(): void {
 async function main(): Promise<void> {
   ensureStateDir();
 
+  if (existsSync(DAEMON_PID_FILE)) {
+    const oldPid = parseInt(readFileSync(DAEMON_PID_FILE, 'utf-8').trim(), 10);
+    if (oldPid && !isNaN(oldPid)) {
+      try {
+        process.kill(oldPid, 0); // Check if process is alive (signal 0 = no signal, just check)
+        console.log(`[daemon] Already running (PID ${oldPid}). Exiting.`);
+        process.exit(1);
+      } catch {
+        // Process not alive — stale PID file, clean up
+        unlinkSync(DAEMON_PID_FILE);
+      }
+    }
+  }
+
   writeFileSync(DAEMON_PID_FILE, String(process.pid));
 
   const state = readState();
@@ -70,8 +91,8 @@ async function main(): Promise<void> {
   });
   mgmtApp.use(mgmtRouter);
 
-  mgmtApp.listen(MGMT_PORT, '127.0.0.1', () => {
-    console.log(`[daemon] Management API on http://127.0.0.1:${MGMT_PORT}`);
+  mgmtApp.listen(MGMT_PORT, MGMT_HOST, () => {
+    console.log(`[daemon] Management API on http://${MGMT_HOST}:${MGMT_PORT}`);
   });
 
   // Main server on 0.0.0.0:19100
@@ -91,15 +112,8 @@ async function main(): Promise<void> {
     // Raw HTTP server so we can intercept before Express
     const server = http.createServer((req, res) => {
       // Tailscale CIDR check
-      const remote = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
-      const isLocal = remote === '127.0.0.1' || remote === '::1';
-      const parts = remote.split('.');
-      const isTailscale = parts.length === 4 &&
-        parseInt(parts[0], 10) === 100 &&
-        parseInt(parts[1], 10) >= 64 &&
-        parseInt(parts[1], 10) <= 127;
-
-      if (!isLocal && !isTailscale) {
+      const remote = req.socket.remoteAddress ?? '';
+      if (!isTailscaleOrLocal(remote)) {
         res.writeHead(403, { 'Content-Type': 'text/plain' });
         res.end('Tailscale access only');
         return;
@@ -121,15 +135,8 @@ async function main(): Promise<void> {
 
     // WebSocket upgrade
     server.on('upgrade', (req, socket, head) => {
-      const remote = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
-      const isLocal = remote === '127.0.0.1' || remote === '::1';
-      const parts = remote.split('.');
-      const isTailscale = parts.length === 4 &&
-        parseInt(parts[0], 10) === 100 &&
-        parseInt(parts[1], 10) >= 64 &&
-        parseInt(parts[1], 10) <= 127;
-
-      if (!isLocal && !isTailscale) {
+      const remote = req.socket.remoteAddress ?? '';
+      if (!isTailscaleOrLocal(remote)) {
         socket.destroy();
         return;
       }
@@ -137,7 +144,7 @@ async function main(): Promise<void> {
       handleUpgrade(req, socket, head);
     });
 
-    server.listen(DASHBOARD_PORT, '0.0.0.0', () => {
+    server.listen(DASHBOARD_PORT, DASHBOARD_HOST, () => {
       const host = tsInfo.hostname || tsInfo.ip || 'localhost';
       console.log(`[daemon] Server on http://${host}:${DASHBOARD_PORT}`);
       console.log(`[daemon] Dashboard: http://${host}:${DASHBOARD_PORT}/lm/`);
