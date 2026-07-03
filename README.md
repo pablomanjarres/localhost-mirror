@@ -1,4 +1,4 @@
-<p align="center"><a href="https://pablo-oss.vercel.app/localhost-mirror"><img src=".github/banner.png" alt="Localhost Mirror" width="100%" /></a></p>
+<p align="center"><a href="https://pablomanjarres.com/oss/localhost-mirror"><img src=".github/banner.png" alt="Localhost Mirror" width="100%" /></a></p>
 
 <h1 align="center">Localhost Mirror</h1>
 
@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/License-MIT-c8542a?style=flat" alt="License: MIT" />
   <img src="https://img.shields.io/badge/status-shipped-2ea44f?style=flat" alt="status: shipped" />
   <a href="https://pablomanjarres.com/portfolio/projects/localhost-mirror"><img src="https://img.shields.io/badge/Portfolio-write--up-c8542a?style=flat&logo=readme&logoColor=white" alt="Portfolio write-up" /></a>
-  <a href="https://pablo-oss.vercel.app/localhost-mirror"><img src="https://img.shields.io/badge/Landing-pablo--oss-111111?style=flat&logo=vercel&logoColor=white" alt="Landing page" /></a>
+  <a href="https://pablomanjarres.com/oss/localhost-mirror"><img src="https://img.shields.io/badge/Landing-pablo--oss-111111?style=flat&logo=vercel&logoColor=white" alt="Landing page" /></a>
 </p>
 
 Localhost Mirror exposes a port on your machine to your other devices, and only your other devices. It runs over Tailscale, so a tunnel opens from your phone, your tablet, or another Mac, and never from the public internet. Run `lm expose 3000` and you get a private URL the rest of your tailnet can visit. It ships as a terminal CLI and a native macOS menu-bar app that share one background daemon.
@@ -153,7 +153,7 @@ MIT.
 ---
 
 <p align="center">
-  <a href="https://pablo-oss.vercel.app/localhost-mirror">Landing</a> ·
+  <a href="https://pablomanjarres.com/oss/localhost-mirror">Landing</a> ·
   <a href="https://pablomanjarres.com/portfolio/projects/localhost-mirror">Portfolio write-up</a> ·
   Built by Pablo Manjarres
 </p>
