@@ -5,331 +5,931 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Localhost Mirror</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
-    background: #0a0a0a;
-    color: #e5e5e5;
-    min-height: 100vh;
+  :root {
+    --bg: #070809;
+    --ink: #e9ebee;
+    --muted: #868d97;
+    --dim: #565c66;
+    --line: #191c21;
+    --line-2: #2a2f37;
+    --glass: rgba(12,14,18,0.55);
+    --live: #3ee08a;
+    --live-2: #10b981;
+    --live-glow: rgba(62,224,138,0.55);
+    --down: #fb5779;
+    --down-glow: rgba(251,87,121,0.5);
+    --warn: #f7b955;
+    --mesh: 76,201,240;            /* cyan structural accent, as rgb triplet */
+    --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, 'Cascadia Code', Consolas, monospace;
   }
-  .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body { overflow-x: hidden; }
+
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    min-height: 100vh;
+    background:
+      radial-gradient(1100px 560px at 50% -10%, rgba(var(--mesh),0.06), transparent 60%),
+      radial-gradient(760px 420px at 84% -6%, rgba(62,224,138,0.045), transparent 62%),
+      linear-gradient(rgba(var(--mesh),0.016) 1px, transparent 1px) 0 0 / 46px 46px,
+      linear-gradient(90deg, rgba(var(--mesh),0.016) 1px, transparent 1px) 0 0 / 46px 46px,
+      var(--bg);
+  }
+
+  /* ---- filmic overlays (fixed, non-interactive) ---- */
+  .grain, .vignette { position: fixed; inset: 0; pointer-events: none; }
+  .vignette {
+    z-index: 40;
+    background: radial-gradient(128% 108% at 50% 26%, transparent 52%, rgba(0,0,0,0.6) 100%);
+  }
+  .grain {
+    z-index: 41;
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 20px 64px;
+  }
+
+  /* ---- header ---- */
   header {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: space-between;
-    margin-bottom: 40px;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 26px;
   }
   h1 {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
+    line-height: 1;
   }
-  h1 span { color: #666; font-weight: 400; }
-  .status-badge {
+  h1 em {
+    font-style: normal;
+    color: var(--live);
+    text-shadow: 0 0 22px var(--live-glow);
+  }
+  .tagline {
+    margin-top: 9px;
+    font: 500 11px var(--mono);
+    letter-spacing: 0.06em;
+    color: var(--dim);
+  }
+  .tagline b { color: rgba(var(--mesh),0.9); font-weight: 500; }
+
+  .badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    background: #1a1a1a;
-    border: 1px solid #262626;
+    gap: 8px;
+    padding: 6px 13px 6px 11px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.028);
+    border: 1px solid var(--line);
+    font: 500 12px var(--mono);
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    white-space: nowrap;
   }
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #22c55e;
-  }
-  .dot.down { background: #ef4444; }
-  .dot.unknown { background: #666; }
 
-  .tunnels { display: flex; flex-direction: column; gap: 8px; }
+  /* ---- status dot + ripple ---- */
+  .dot {
+    position: relative;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex: none;
+    background: var(--dc, #5a6069);
+    box-shadow: 0 0 9px -1px var(--dc, transparent);
+  }
+  .dot.live { --dc: var(--live); }
+  .dot.down { --dc: var(--down); }
+  .dot.warn { --dc: var(--warn); }
+  .dot.off  { --dc: var(--warn); }
+  .dot::after {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 1px solid var(--dc, transparent);
+    animation: ripple 2.4s ease-out infinite;
+  }
+  @keyframes ripple {
+    0%   { transform: scale(1); opacity: 0.65; }
+    100% { transform: scale(3.2); opacity: 0; }
+  }
+
+  /* ---- hero: ambient globe canvas + glass telemetry ---- */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    margin-bottom: 22px;
+    background:
+      linear-gradient(158deg, rgba(var(--mesh),0.05), transparent 42%),
+      rgba(10,12,15,0.5);
+    animation: rise 0.6s both;
+  }
+  .globe {
+    position: absolute; inset: 0;
+    z-index: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
+  .hero::after {
+    content: "";
+    position: absolute; inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: radial-gradient(122% 96% at 68% 42%, transparent 40%, rgba(7,8,9,0.55) 100%);
+  }
+  .hero-inner {
+    position: relative;
+    z-index: 2;
+    padding: 22px 22px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .metrics { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat {
+    position: relative;
+    padding: 13px 17px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(9px) saturate(1.15);
+    backdrop-filter: blur(9px) saturate(1.15);
+    min-width: 100px;
+    animation: rise 0.6s both;
+  }
+  .stat:nth-child(2) { animation-delay: 0.07s; }
+  .stat:nth-child(3) { animation-delay: 0.14s; }
+  .stat-num {
+    font: 600 32px/1 var(--mono);
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat.live .stat-num { color: var(--live); text-shadow: 0 0 20px var(--live-glow); }
+  .stat.down .stat-num { color: var(--down); }
+  .stat.down.zero .stat-num { color: var(--dim); text-shadow: none; }
+  .stat-label {
+    margin-top: 7px;
+    font: 500 10px var(--mono);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  /* ---- topology ---- */
+  .topo-wrap { position: relative; margin-top: 2px; }
+  .topo { width: 100%; height: 148px; display: block; }
+  .wire {
+    fill: none;
+    stroke: rgba(var(--mesh),0.24);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-dasharray: 2 8;
+    animation: flow 1.3s linear infinite;
+  }
+  .hero.alive .wire { stroke: rgba(var(--mesh),0.42); }
+  @keyframes flow { to { stroke-dashoffset: -10; } }
+  .packet { filter: drop-shadow(0 0 4px var(--pc, transparent)); }
+  .node-ring { fill: none; stroke: rgba(var(--mesh),0.16); stroke-width: 1; }
+  .hero.alive .node-ring {
+    stroke: rgba(62,224,138,0.34);
+    animation: ringpulse 3.1s ease-in-out infinite;
+  }
+  @keyframes ringpulse { 0%,100% { opacity: 0.34; } 50% { opacity: 0.85; } }
+  .node-bg { fill: rgba(9,11,14,0.94); stroke: var(--line); stroke-width: 1; }
+  .node-ic {
+    fill: none;
+    stroke: rgba(var(--mesh),0.72);
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .ts-dot { fill: rgba(var(--mesh),0.6); }
+  .node-label {
+    fill: var(--dim);
+    font: 600 8.5px var(--mono);
+    letter-spacing: 0.14em;
+    text-anchor: middle;
+  }
+  .topo-legend {
+    text-align: center;
+    padding: 2px 0 12px;
+    font: 500 10px var(--mono);
+    letter-spacing: 0.12em;
+    color: var(--dim);
+  }
+  .topo-legend b { color: rgba(var(--mesh),0.85); font-weight: 500; }
+
+  /* ---- expose form ---- */
+  .expose {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    animation: rise 0.6s both;
+    animation-delay: 0.05s;
+  }
+  .expose input {
+    flex: 1;
+    padding: 10px 15px;
+    border-radius: 11px;
+    border: 1px solid var(--line);
+    background: rgba(12,14,18,0.6);
+    color: var(--ink);
+    font: 13px var(--mono);
+    outline: none;
+    transition: border-color 0.18s, box-shadow 0.18s;
+  }
+  .expose input:focus {
+    border-color: rgba(var(--mesh),0.5);
+    box-shadow: 0 0 0 3px rgba(var(--mesh),0.08);
+  }
+  .expose input::placeholder { color: #40454d; }
+  .btn-expose {
+    position: relative;
+    overflow: hidden;
+    padding: 10px 22px;
+    border-radius: 11px;
+    border: 1px solid rgba(62,224,138,0.28);
+    background: linear-gradient(180deg, rgba(62,224,138,0.16), rgba(16,185,129,0.1));
+    color: var(--live);
+    font: 600 13px var(--sans);
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: border-color 0.18s, box-shadow 0.18s;
+  }
+  .btn-expose:hover {
+    border-color: rgba(62,224,138,0.55);
+    box-shadow: 0 0 24px -8px var(--live-glow);
+  }
+  .btn-expose::before {
+    content: "";
+    position: absolute; top: 0; left: -120%;
+    width: 60%; height: 100%;
+    background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.35) 50%, transparent 80%);
+    transform: skewX(-22deg);
+    transition: left 0.7s cubic-bezier(0.25,0.46,0.45,0.94);
+  }
+  .btn-expose:hover::before { left: 130%; }
+
+  /* ---- tunnel list ---- */
+  .tunnels { display: flex; flex-direction: column; gap: 9px; }
   .tunnel {
+    position: relative;
+    overflow: hidden;
     display: grid;
-    grid-template-columns: 6px 1fr auto;
+    grid-template-columns: 8px 1fr auto;
     align-items: center;
     gap: 16px;
-    padding: 16px 20px;
-    background: #111;
-    border: 1px solid #1f1f1f;
-    border-radius: 12px;
-    transition: border-color 0.15s;
+    padding: 15px 20px;
+    background: rgba(14,16,20,0.72);
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    transition: border-color 0.16s, transform 0.16s;
   }
-  .tunnel:hover { border-color: #333; }
-  .tunnel-info { display: flex; flex-direction: column; gap: 4px; }
+  .tunnel::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--edge, transparent);
+  }
+  .tunnel:hover { border-color: var(--line-2); transform: translateY(-1px); }
+  .tunnel.live {
+    --edge: linear-gradient(var(--live), var(--live-2));
+    box-shadow: inset 0 0 0 1px rgba(62,224,138,0.08), 0 0 26px -16px var(--live-glow);
+  }
+  .tunnel.live::after {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background: radial-gradient(280px 120px at 0% 50%, rgba(62,224,138,0.1), transparent 68%);
+  }
+  .tunnel.down { --edge: linear-gradient(var(--down), #7f1d2b); }
+  .tunnel.down::after {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background: radial-gradient(280px 120px at 0% 50%, rgba(251,87,121,0.08), transparent 68%);
+  }
+  .tunnel.warn { --edge: linear-gradient(var(--warn), #7a5310); }
+
+  .tunnel-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .tunnel-name {
-    font-size: 14px;
-    font-weight: 500;
-    color: #fff;
+    display: flex; align-items: center; gap: 9px;
+    font-size: 14px; font-weight: 600; color: #fff;
+    letter-spacing: -0.01em;
   }
-  .tunnel-url {
-    font-size: 13px;
-    font-family: 'SF Mono', Menlo, monospace;
-    color: #888;
+  .tunnel-state {
+    font: 500 9px var(--mono);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 5px;
+    color: var(--muted);
+    border: 1px solid var(--line);
   }
-  .tunnel-meta {
-    display: flex;
-    gap: 12px;
-    font-size: 11px;
-    color: #555;
+  .tunnel.live .tunnel-state { color: var(--live); border-color: rgba(62,224,138,0.25); }
+  .tunnel.down .tunnel-state { color: var(--down); border-color: rgba(251,87,121,0.25); }
+  .tunnel.warn .tunnel-state { color: var(--warn); border-color: rgba(247,185,85,0.25); }
+  .tunnel-url { font: 13px var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .tunnel-url a { color: var(--muted); text-decoration: none; }
+  .tunnel-url a:hover { color: rgba(var(--mesh),0.95); }
+  .tunnel-meta { display: flex; gap: 12px; font: 11px var(--mono); color: var(--dim); }
+  .tunnel-meta .tag {
+    padding: 1px 6px; border-radius: 4px;
+    border: 1px solid var(--line); color: var(--muted);
   }
+
   .tunnel-actions { display: flex; gap: 8px; }
   .btn {
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 500;
+    position: relative;
+    padding: 7px 14px;
+    border-radius: 9px;
+    font: 500 12px var(--sans);
     cursor: pointer;
-    border: 1px solid #262626;
-    background: #1a1a1a;
-    color: #ccc;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,0.02);
+    color: #c3c7cd;
     transition: all 0.15s;
   }
-  .btn:hover { background: #262626; color: #fff; }
-  .btn-stop { border-color: #3b1111; }
-  .btn-stop:hover { background: #3b1111; color: #f87171; }
-  .btn-copy { border-color: #1a2e1a; }
-  .btn-copy:hover { background: #1a2e1a; color: #4ade80; }
+  .btn:hover { background: rgba(255,255,255,0.05); color: #fff; border-color: var(--line-2); }
+  .btn:active { transform: scale(0.96); }
+  .btn-stop { border-color: rgba(120,30,40,0.5); }
+  .btn-stop:hover { background: rgba(251,87,121,0.12); color: var(--down); border-color: rgba(251,87,121,0.4); }
+  .btn-copy:hover { background: rgba(62,224,138,0.1); color: var(--live); border-color: rgba(62,224,138,0.35); }
 
   .empty {
     text-align: center;
-    padding: 60px 20px;
-    color: #555;
+    padding: 54px 20px;
+    color: var(--dim);
     font-size: 14px;
+    border: 1px dashed var(--line);
+    border-radius: 13px;
   }
   .empty code {
     display: inline-block;
-    margin-top: 8px;
-    padding: 4px 10px;
-    background: #1a1a1a;
-    border-radius: 6px;
-    font-family: 'SF Mono', Menlo, monospace;
-    font-size: 13px;
-    color: #888;
+    margin-top: 10px;
+    padding: 5px 11px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    font: 13px var(--mono);
+    color: var(--muted);
   }
-
-  .expose-form {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 24px;
-  }
-  .expose-form input {
-    flex: 1;
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: 1px solid #262626;
-    background: #111;
-    color: #e5e5e5;
-    font-size: 13px;
-    font-family: 'SF Mono', Menlo, monospace;
-    outline: none;
-  }
-  .expose-form input:focus { border-color: #444; }
-  .expose-form input::placeholder { color: #444; }
-  .btn-expose {
-    padding: 8px 20px;
-    border-radius: 8px;
-    border: 1px solid #1a2e1a;
-    background: #1a2e1a;
-    color: #4ade80;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-  }
-  .btn-expose:hover { background: #224422; }
 
   .toast {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    padding: 10px 18px;
-    border-radius: 8px;
-    background: #1a2e1a;
-    color: #4ade80;
-    font-size: 13px;
+    bottom: 22px; right: 22px;
+    z-index: 60;
+    padding: 11px 18px;
+    border-radius: 10px;
+    background: rgba(16,20,17,0.92);
+    border: 1px solid rgba(62,224,138,0.3);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: var(--live);
+    font: 500 13px var(--sans);
+    box-shadow: 0 12px 40px -18px var(--live-glow);
     opacity: 0;
-    transition: opacity 0.2s;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
     pointer-events: none;
   }
-  .toast.show { opacity: 1; }
+  .toast.show { opacity: 1; transform: none; }
 
-  @media (max-width: 600px) {
-    .container { padding: 20px 14px; }
-    header { margin-bottom: 24px; }
-    h1 { font-size: 17px; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+  }
 
-    .expose-form {
-      flex-direction: column;
-    }
-    .expose-form input,
-    .btn-expose {
-      width: 100%;
-    }
+  @media (max-width: 640px) {
+    .container { padding: 26px 14px 48px; }
+    h1 { font-size: 19px; }
+    .hero-inner { padding: 18px 16px 6px; }
+    .metrics { gap: 8px; }
+    .stat { min-width: 0; flex: 1; padding: 11px 13px; }
+    .stat-num { font-size: 25px; }
+    .topo { height: 130px; }
+    .expose { flex-direction: column; }
+    .btn-expose { width: 100%; }
+    .tunnel { grid-template-columns: 8px 1fr; gap: 11px; padding: 14px; }
+    .tunnel-actions { grid-column: 1 / -1; }
+    .tunnel-actions .btn { flex: 1; text-align: center; }
+    .tunnel-url { font-size: 12px; word-break: break-all; }
+    .toast { left: 14px; right: 14px; bottom: 14px; text-align: center; }
+  }
 
-    .tunnel {
-      grid-template-columns: 6px 1fr;
-      gap: 10px;
-      padding: 14px 14px;
-    }
-    .tunnel-actions {
-      grid-column: 1 / -1;
-      justify-content: stretch;
-    }
-    .tunnel-actions .btn {
-      flex: 1;
-      text-align: center;
-    }
-    .tunnel-url {
-      font-size: 12px;
-      word-break: break-all;
-    }
-
-    .toast {
-      left: 14px;
-      right: 14px;
-      bottom: 14px;
-      text-align: center;
-    }
+  /* ---- honor reduced motion ---- */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .wire { stroke-dasharray: none; }
+    .btn-expose::before { display: none; }
   }
 </style>
 </head>
 <body>
-<div class="container">
+<div class="vignette"></div>
+<div class="grain"></div>
+
+<main class="container">
   <header>
-    <h1>localhost mirror <span>tunnels</span></h1>
-    <div class="status-badge">
-      <div class="dot" id="daemon-dot"></div>
-      <span id="daemon-status">connected</span>
+    <div class="brand">
+      <h1>localhost <em>mirror</em></h1>
+      <p class="tagline">secure tunnels · <b>localhost → tailnet → world</b></p>
+    </div>
+    <div class="badge">
+      <span class="dot" id="daemon-dot"></span>
+      <span id="daemon-status">connecting…</span>
     </div>
   </header>
 
-  <form class="expose-form" id="expose-form">
+  <section class="hero" id="hero">
+    <canvas class="globe" id="globe" aria-hidden="true"></canvas>
+    <div class="hero-inner">
+      <div class="metrics">
+        <div class="stat live"><div class="stat-num" id="m-live">0</div><div class="stat-label">live</div></div>
+        <div class="stat"><div class="stat-num" id="m-total">0</div><div class="stat-label">tunnels</div></div>
+        <div class="stat down zero"><div class="stat-num" id="m-down">0</div><div class="stat-label">down</div></div>
+      </div>
+      <div class="topo-wrap">
+        <svg class="topo" viewBox="0 0 640 148" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <!-- links (under nodes) -->
+          <path id="wire-a" class="wire" d="M80 74 L320 74"></path>
+          <path id="wire-b" class="wire" d="M320 74 L560 74"></path>
+          <!-- animated packets injected here -->
+          <g id="packets"></g>
+          <!-- node: localhost -->
+          <g>
+            <circle class="node-ring" cx="80" cy="74" r="33"></circle>
+            <circle class="node-bg" cx="80" cy="74" r="25"></circle>
+            <g class="node-ic">
+              <rect x="68" y="65" width="24" height="16" rx="2.5"></rect>
+              <line x1="75" y1="86" x2="85" y2="86"></line>
+              <line x1="80" y1="81" x2="80" y2="86"></line>
+            </g>
+            <text class="node-label" x="80" y="120">LOCALHOST</text>
+          </g>
+          <!-- node: tailscale -->
+          <g>
+            <circle class="node-ring" cx="320" cy="74" r="33"></circle>
+            <circle class="node-bg" cx="320" cy="74" r="25"></circle>
+            <g>
+              <circle class="ts-dot" cx="312" cy="66" r="1.7"></circle>
+              <circle class="ts-dot" cx="320" cy="66" r="1.7"></circle>
+              <circle class="ts-dot" cx="328" cy="66" r="1.7"></circle>
+              <circle class="ts-dot" cx="312" cy="74" r="1.7"></circle>
+              <circle class="ts-dot" cx="320" cy="74" r="1.7"></circle>
+              <circle class="ts-dot" cx="328" cy="74" r="1.7"></circle>
+              <circle class="ts-dot" cx="312" cy="82" r="1.7"></circle>
+              <circle class="ts-dot" cx="320" cy="82" r="1.7"></circle>
+              <circle class="ts-dot" cx="328" cy="82" r="1.7"></circle>
+            </g>
+            <text class="node-label" x="320" y="120">TAILSCALE</text>
+          </g>
+          <!-- node: world -->
+          <g>
+            <circle class="node-ring" cx="560" cy="74" r="33"></circle>
+            <circle class="node-bg" cx="560" cy="74" r="25"></circle>
+            <g class="node-ic">
+              <circle cx="560" cy="74" r="14"></circle>
+              <ellipse cx="560" cy="74" rx="5.6" ry="14"></ellipse>
+              <line x1="546" y1="74" x2="574" y2="74"></line>
+            </g>
+            <text class="node-label" x="560" y="120">WORLD</text>
+          </g>
+        </svg>
+        <div class="topo-legend">this machine &nbsp;<b>→</b>&nbsp; tailnet &nbsp;<b>→</b>&nbsp; the internet</div>
+      </div>
+    </div>
+  </section>
+
+  <form class="expose" id="expose-form">
     <input type="number" id="port-input" placeholder="port (e.g. 3000)" min="1" max="65535" required>
     <input type="text" id="name-input" placeholder="name (optional)">
     <button type="submit" class="btn-expose">Expose</button>
   </form>
 
   <div class="tunnels" id="tunnels"></div>
-</div>
+</main>
 
 <div class="toast" id="toast"></div>
 
 <script>
-const tunnelsEl = document.getElementById('tunnels');
-const toastEl = document.getElementById('toast');
-const daemonDot = document.getElementById('daemon-dot');
-const daemonStatus = document.getElementById('daemon-status');
-const exposeForm = document.getElementById('expose-form');
+"use strict";
+const TAU = Math.PI * 2;
+const SVGNS = "http://www.w3.org/2000/svg";
+const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-function toast(msg) {
-  toastEl.textContent = msg;
-  toastEl.classList.add('show');
-  setTimeout(() => toastEl.classList.remove('show'), 2000);
+/* ---------- element refs ---------- */
+const tunnelsEl   = document.getElementById("tunnels");
+const toastEl     = document.getElementById("toast");
+const daemonDot   = document.getElementById("daemon-dot");
+const daemonStat  = document.getElementById("daemon-status");
+const exposeForm  = document.getElementById("expose-form");
+const heroEl      = document.getElementById("hero");
+const cv          = document.getElementById("globe");
+const packetLayer = document.getElementById("packets");
+const WA = document.getElementById("wire-a");
+const WB = document.getElementById("wire-b");
+const mLive  = document.getElementById("m-live");
+const mTotal = document.getElementById("m-total");
+const mDown  = document.getElementById("m-down");
+const statDown = mDown.closest(".stat");
+
+/* ---------- graceful sample data (shown when no daemon) ---------- */
+const now = Date.now();
+const SAMPLE = [
+  { id: "s1", name: "web",       localPort: 3000, token: null,      createdAt: new Date(now - 1000 * 60 * 42).toISOString(),  status: "active" },
+  { id: "s2", name: "api",       localPort: 8080, token: "d3m0tok", createdAt: new Date(now - 1000 * 60 * 18).toISOString(),  status: "active" },
+  { id: "s3", name: "storybook", localPort: 6006, token: null,      createdAt: new Date(now - 1000 * 60 * 7).toISOString(),   status: "active" },
+  { id: "s4", name: "db-admin",  localPort: 5432, token: "d3m0tok", createdAt: new Date(now - 1000 * 60 * 91).toISOString(),  status: "target-down" },
+  { id: "s5", name: "grafana",   localPort: 3001, token: null,      createdAt: new Date(now - 1000 * 60 * 3).toISOString(),   status: "error" }
+];
+
+/* ---------- small utils ---------- */
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-
 function timeAgo(iso) {
   const ms = Date.now() - new Date(iso).getTime();
   const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
+  if (s < 60) return s + "s";
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
+  if (m < 60) return m + "m";
   const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m`;
+  return h + "h " + (m % 60) + "m";
+}
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => toastEl.classList.remove("show"), 2000);
+}
+function hashStr(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function statusClass(st) {
+  return st === "active" ? "live" : st === "error" ? "warn" : "down";
 }
 
-async function fetchTunnels() {
-  try {
-    const res = await fetch('/lm/api/tunnels');
-    const data = await res.json();
-    daemonDot.className = 'dot';
-    daemonStatus.textContent = 'connected';
-    render(data.tunnels || []);
-  } catch {
-    daemonDot.className = 'dot down';
-    daemonStatus.textContent = 'disconnected';
-    tunnelsEl.innerHTML = '<div class="empty">Daemon not reachable</div>';
+/* ---------- count-up metrics ---------- */
+function countUp(el, to) {
+  const from = parseInt(el.dataset.v || "0", 10);
+  el.dataset.v = String(to);
+  if (reduced || from === to) { el.textContent = String(to); return; }
+  const t0 = performance.now(), dur = 650;
+  (function tick(t) {
+    const p = Math.min(1, (t - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = String(Math.round(from + (to - from) * e));
+    if (p < 1) requestAnimationFrame(tick);
+    else el.textContent = String(to);
+  })(t0);
+}
+function updateMetrics(tunnels) {
+  const live = tunnels.filter(t => t.status === "active").length;
+  const down = tunnels.length - live;
+  countUp(mLive, live);
+  countUp(mTotal, tunnels.length);
+  countUp(mDown, down);
+  statDown.classList.toggle("zero", down === 0);
+}
+
+/* ---------- ambient point-globe ---------- */
+const G = {
+  ctx: cv.getContext("2d"),
+  w: 0, h: 0, dpr: 1, cx: 0, cy: 0, R: 120,
+  MESHDIST: 60, MESHDIST2: 3600,
+  rot: 0.5, points: [], scratch: []
+};
+let activeCount = 0;
+
+function fibSphere(n) {
+  const pts = [], ga = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) {
+    const y = 1 - (i / (n - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const th = ga * i;
+    pts.push({ x: Math.cos(th) * r, y: y, z: Math.sin(th) * r, state: null, seed: Math.random() * TAU });
+  }
+  return pts;
+}
+function buildGlobe() {
+  G.points = fibSphere(120);
+  G.scratch = G.points.map(() => ({ sx: 0, sy: 0, d: 0, state: null, seed: 0 }));
+}
+function resize() {
+  const rect = heroEl.getBoundingClientRect();
+  G.w = Math.max(1, rect.width);
+  G.h = Math.max(1, rect.height);
+  G.dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(G.w * G.dpr);
+  cv.height = Math.round(G.h * G.dpr);
+  cv.style.width = G.w + "px";
+  cv.style.height = G.h + "px";
+  G.ctx.setTransform(G.dpr, 0, 0, G.dpr, 0, 0);
+  G.cx = G.w > 640 ? G.w * 0.70 : G.w * 0.5;
+  G.cy = G.h * 0.46;
+  G.R = clamp(Math.min(G.w, G.h) * 0.40, 92, 190);
+  G.MESHDIST = G.R * 0.5;
+  G.MESHDIST2 = G.MESHDIST * G.MESHDIST;
+  drawGlobe(performance.now());
+}
+function syncGlobe(tunnels) {
+  const pts = G.points, n = pts.length;
+  for (let i = 0; i < n; i++) pts[i].state = null;
+  let live = 0;
+  for (const t of tunnels) {
+    let idx = hashStr(t.name || ("p" + t.localPort)) % n, tries = 0;
+    while (pts[idx].state && tries < n) { idx = (idx + 7) % n; tries++; }
+    const st = statusClass(t.status);
+    pts[idx].state = st;
+    if (st === "live") live++;
+  }
+  activeCount = live;
+  heroEl.classList.toggle("alive", live > 0);
+}
+function drawGlobe(t) {
+  const ctx = G.ctx, cx = G.cx, cy = G.cy, R = G.R, S = G.scratch, P = G.points;
+  ctx.clearRect(0, 0, G.w, G.h);
+
+  // soft bloom behind the sphere
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.7);
+  grad.addColorStop(0, "rgba(76,201,240,0.11)");
+  grad.addColorStop(0.4, activeCount > 0 ? "rgba(62,224,138,0.05)" : "rgba(76,201,240,0.03)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(cx, cy, R * 1.7, 0, TAU); ctx.fill();
+
+  // project all points
+  const cr = Math.cos(G.rot), sr = Math.sin(G.rot);
+  for (let i = 0; i < P.length; i++) {
+    const p = P[i];
+    const x = p.x * cr - p.z * sr;
+    const z = p.x * sr + p.z * cr;
+    S[i].sx = cx + x * R;
+    S[i].sy = cy - p.y * R;
+    S[i].d = (z + 1) / 2;
+    S[i].state = p.state;
+    S[i].seed = p.seed;
+  }
+
+  // constellation mesh (front hemisphere only)
+  ctx.lineWidth = 1;
+  for (let i = 0; i < S.length; i++) {
+    if (S[i].d < 0.52) continue;
+    for (let j = i + 1; j < S.length; j++) {
+      if (S[j].d < 0.52) continue;
+      const dx = S[i].sx - S[j].sx, dy = S[i].sy - S[j].sy;
+      const dd = dx * dx + dy * dy;
+      if (dd < G.MESHDIST2) {
+        const a = (1 - Math.sqrt(dd) / G.MESHDIST) * 0.11 * Math.min(S[i].d, S[j].d);
+        ctx.strokeStyle = "rgba(76,201,240," + a.toFixed(3) + ")";
+        ctx.beginPath();
+        ctx.moveTo(S[i].sx, S[i].sy);
+        ctx.lineTo(S[j].sx, S[j].sy);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // points (lit per tunnel)
+  for (let i = 0; i < S.length; i++) {
+    const s = S[i], depth = s.d;
+    let r, col, glow = 0;
+    if (s.state === "live") {
+      const pl = 0.5 + 0.5 * Math.sin(t * 0.004 + s.seed);
+      r = 2.2 + 1.7 * depth + pl * 0.9;
+      col = "rgba(62,224,138," + (0.5 + 0.5 * depth).toFixed(3) + ")";
+      glow = 10 + pl * 6;
+    } else if (s.state === "warn") {
+      r = 2 + 1.3 * depth;
+      col = "rgba(247,185,85," + (0.5 + 0.5 * depth).toFixed(3) + ")";
+      glow = 8;
+    } else if (s.state === "down") {
+      r = 2 + 1.3 * depth;
+      col = "rgba(251,87,121," + (0.5 + 0.5 * depth).toFixed(3) + ")";
+      glow = 8;
+    } else {
+      r = 0.7 + 1.2 * depth;
+      col = "rgba(126,152,170," + (0.1 + 0.22 * depth).toFixed(3) + ")";
+    }
+    if (glow) { ctx.shadowBlur = glow; ctx.shadowColor = col; }
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(s.sx, s.sy, r, 0, TAU); ctx.fill();
+    if (glow) ctx.shadowBlur = 0;
   }
 }
 
+/* ---------- topology packets (SVG, keyed to tunnel status) ---------- */
+let PACKETS = [];
+let LENA = 240, LENB = 240, TOTAL = 480;
+function measurePaths() {
+  try {
+    LENA = WA.getTotalLength();
+    LENB = WB.getTotalLength();
+    TOTAL = LENA + LENB;
+  } catch (e) { /* keep defaults */ }
+}
+function syncPackets(tunnels) {
+  while (packetLayer.firstChild) packetLayer.removeChild(packetLayer.firstChild);
+  PACKETS = [];
+  const list = tunnels.slice(0, 14);
+  const n = Math.max(1, list.length);
+  list.forEach((t, i) => {
+    const live = t.status === "active";
+    const c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("class", "packet");
+    c.setAttribute("r", live ? "2.7" : "2.4");
+    const glow = live ? "#3ee08a" : t.status === "error" ? "#f7b955" : "#fb5779";
+    c.style.fill = glow;
+    c.style.setProperty("--pc", glow);
+    packetLayer.appendChild(c);
+    PACKETS.push({
+      el: c,
+      live: live,
+      phase: (i + Math.random() * 0.35) / n,
+      speed: live ? 0.11 + Math.random() * 0.03 : 0.16 + Math.random() * 0.04
+    });
+  });
+  updatePackets(performance.now());
+}
+function updatePackets(t) {
+  for (const pk of PACKETS) {
+    let pt, op;
+    const prog = ((t * 0.001 * pk.speed) + pk.phase) % 1;
+    if (pk.live) {
+      const d = prog * TOTAL;
+      pt = d < LENA ? WA.getPointAtLength(d) : WB.getPointAtLength(d - LENA);
+      op = 1;
+    } else {
+      pt = WA.getPointAtLength(prog * LENA * 0.7);
+      op = Math.max(0, 1 - prog * 1.15);
+    }
+    pk.el.setAttribute("cx", pt.x.toFixed(1));
+    pk.el.setAttribute("cy", pt.y.toFixed(1));
+    pk.el.style.opacity = op.toFixed(2);
+  }
+}
+
+/* ---------- master animation loop ---------- */
+let RAF = 0;
+function loop(t) {
+  G.rot = t * 0.00018;
+  drawGlobe(t);
+  updatePackets(t);
+  RAF = requestAnimationFrame(loop);
+}
+function startLoop() {
+  if (reduced || RAF) return;
+  RAF = requestAnimationFrame(loop);
+}
+function stopLoop() {
+  if (RAF) { cancelAnimationFrame(RAF); RAF = 0; }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopLoop(); else startLoop();
+});
+
+/* ---------- daemon badge ---------- */
+function setDaemon(online) {
+  if (online) {
+    daemonDot.className = "dot live";
+    daemonStat.textContent = "mesh online";
+  } else {
+    daemonDot.className = "dot off";
+    daemonStat.textContent = "demo · offline";
+  }
+}
+
+/* ---------- render ---------- */
 function render(tunnels) {
-  if (tunnels.length === 0) {
+  updateMetrics(tunnels);
+  syncGlobe(tunnels);
+  syncPackets(tunnels);
+  buildList(tunnels);
+  if (reduced) { drawGlobe(performance.now()); }
+}
+function buildList(tunnels) {
+  if (!tunnels.length) {
     tunnelsEl.innerHTML = '<div class="empty">No active tunnels<br><code>lm expose &lt;port&gt;</code></div>';
     return;
   }
   tunnelsEl.innerHTML = tunnels.map(t => {
-    const aliasUrl = `${location.origin}/${t.name}`;
-    const fullUrl = t.token ? `${aliasUrl}?token=${t.token}` : aliasUrl;
-    const dotClass = t.status === 'active' ? '' : t.status === 'target-down' ? 'down' : 'unknown';
-    return `
-      <div class="tunnel">
-        <div class="dot ${dotClass}"></div>
-        <div class="tunnel-info">
-          <div class="tunnel-name">${esc(t.name)}</div>
-          <div class="tunnel-url">
-            <a href="${esc(fullUrl)}" style="color:#888;text-decoration:none">${esc(aliasUrl)}</a>
-          </div>
-          <div class="tunnel-meta">
-            <span>localhost:${t.localPort}</span>
-            <span>up ${timeAgo(t.createdAt)}</span>
-            ${t.token ? '<span>token-auth</span>' : ''}
-          </div>
-        </div>
-        <div class="tunnel-actions">
-          <button class="btn btn-copy" onclick="copyUrl('${fullUrl}')">Copy</button>
-          <button class="btn btn-copy" onclick="window.open('${esc(fullUrl)}','_blank')">Open</button>
-          <button class="btn btn-stop" onclick="stopTunnel('${t.id}')">Stop</button>
-        </div>
-      </div>
-    `;
-  }).join('');
+    const aliasUrl = location.origin + "/" + t.name;
+    const fullUrl = t.token ? aliasUrl + "?token=" + t.token : aliasUrl;
+    const cls = statusClass(t.status);
+    const label = t.status === "active" ? "live" : t.status === "target-down" ? "down" : t.status;
+    return '' +
+      '<article class="tunnel ' + cls + '">' +
+        '<span class="dot ' + cls + '" aria-hidden="true"></span>' +
+        '<div class="tunnel-info">' +
+          '<div class="tunnel-name">' + esc(t.name) + '<span class="tunnel-state">' + esc(label) + '</span></div>' +
+          '<div class="tunnel-url"><a href="' + esc(fullUrl) + '">' + esc(aliasUrl) + '</a></div>' +
+          '<div class="tunnel-meta">' +
+            '<span>localhost:' + esc(t.localPort) + '</span>' +
+            '<span>up ' + esc(timeAgo(t.createdAt)) + '</span>' +
+            (t.token ? '<span class="tag">token-auth</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="tunnel-actions">' +
+          '<button class="btn btn-copy" data-act="copy" data-url="' + esc(fullUrl) + '">Copy</button>' +
+          '<button class="btn" data-act="open" data-url="' + esc(fullUrl) + '">Open</button>' +
+          '<button class="btn btn-stop" data-act="stop" data-id="' + esc(t.id) + '">Stop</button>' +
+        '</div>' +
+      '</article>';
+  }).join("");
 }
 
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-async function copyUrl(url) {
+/* ---------- data flow (unchanged API contract) ---------- */
+async function fetchTunnels() {
   try {
-    await navigator.clipboard.writeText(url);
-    toast('URL copied');
-  } catch {
-    toast('Copy failed');
+    const res = await fetch("/lm/api/tunnels");
+    const data = await res.json();
+    setDaemon(true);
+    render(data.tunnels || []);
+  } catch (e) {
+    setDaemon(false);
+    render(SAMPLE);
   }
 }
 
+/* ---------- list actions (event delegation) ---------- */
+tunnelsEl.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  const act = b.dataset.act;
+  if (act === "copy") copyUrl(b.dataset.url);
+  else if (act === "open") window.open(b.dataset.url, "_blank");
+  else if (act === "stop") stopTunnel(b.dataset.id);
+});
+async function copyUrl(url) {
+  try { await navigator.clipboard.writeText(url); toast("URL copied"); }
+  catch (e) { toast("Copy failed"); }
+}
 async function stopTunnel(id) {
-  await fetch(`/lm/api/tunnels/${id}`, { method: 'DELETE' });
-  toast('Tunnel stopped');
+  try {
+    await fetch("/lm/api/tunnels/" + id, { method: "DELETE" });
+    toast("Tunnel stopped");
+  } catch (e) { toast("Failed to stop"); }
   fetchTunnels();
 }
 
-exposeForm.addEventListener('submit', async (e) => {
+/* ---------- expose form (unchanged API contract) ---------- */
+exposeForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const port = parseInt(document.getElementById('port-input').value, 10);
-  const name = document.getElementById('name-input').value || undefined;
+  const port = parseInt(document.getElementById("port-input").value, 10);
+  const name = document.getElementById("name-input").value || undefined;
   try {
-    const res = await fetch('/lm/api/tunnels', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ localPort: port, name }),
+    const res = await fetch("/lm/api/tunnels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ localPort: port, name: name })
     });
     const data = await res.json();
     if (data.ok) {
-      toast(`Exposed :${port}`);
-      document.getElementById('port-input').value = '';
-      document.getElementById('name-input').value = '';
+      toast("Exposed :" + port);
+      document.getElementById("port-input").value = "";
+      document.getElementById("name-input").value = "";
     } else {
-      toast(data.error || 'Failed');
+      toast(data.error || "Failed");
     }
-  } catch {
-    toast('Failed to connect');
+  } catch (e) {
+    toast("Failed to connect");
   }
   fetchTunnels();
 });
 
+/* ---------- boot ---------- */
+buildGlobe();
+measurePaths();
+resize();
+window.addEventListener("resize", () => {
+  cancelAnimationFrame(resize._r);
+  resize._r = requestAnimationFrame(resize);
+});
+if (!reduced) startLoop();
 fetchTunnels();
 setInterval(fetchTunnels, 3000);
 </script>
